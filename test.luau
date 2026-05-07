@@ -42,7 +42,7 @@ function Setup(Commands, Score)
 	Score.value += 3
 end
 
-local moveQueryId = Ecs:Query {
+local MoveQuery = Ecs:Query {
 	Mutable = { Position },
 	Immutable = { Velocity },
 	With = { EnemyTag },
@@ -62,4 +62,4 @@ function Update(Time, Commands, MoveQuery)
 end
 
 Ecs:RegisterSystem(Setup, Ecs:Startup(), { Ecs:Time(), Ecs:Commands(), Score })
-Ecs:RegisterSystem(Update, Ecs:Update(), { Ecs:Time(), Ecs:Commands(), moveQueryId })
+Ecs:RegisterSystem(Update, Ecs:Update(), { Ecs:Time(), Ecs:Commands(), MoveQuery })
