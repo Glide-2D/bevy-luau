@@ -4,3 +4,39 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bevy = { version = "0.18.1", features = ["2d"], default-features = false }
+mlua = { version = "0.11.6", features = ["luau", "vendored"] }
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+debug = false
+strip = "debuginfo"
+lto = "fat"
+panic = "abort"
+codegen-units = 1
+
+[lints.clippy]
+all = { level = "warn", priority = -2 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+type_complexity = "allow"
+too_many_arguments = "allow"
+too_many_lines = "allow"
+needless_pass_by_value = "allow"
+module_name_repetitions = "allow"
+cast_possible_truncation = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+indexing_slicing = "warn"
+panic = "warn"
+cast_precision_loss = "warn"
+cast_sign_loss = "warn"
+overflow_check_conditional = "warn"
+allow_attributes_without_reason = "warn"
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "deny"
