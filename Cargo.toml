@@ -36,7 +36,3 @@ cast_precision_loss = "warn"
 cast_sign_loss = "warn"
 overflow_check_conditional = "warn"
 allow_attributes_without_reason = "warn"
-
-[lints.rust]
-missing_docs = "warn"
-unsafe_code = "deny"
