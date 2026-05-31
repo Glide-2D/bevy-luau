@@ -33,9 +33,9 @@ Ecs:Observe(OnDeath, OnDeathObserver, { Ecs:Commands() })
 
 function Setup(Commands, Score)
 	Commands:Spawn({
-		[EnemyTag] = { Ecs:Default() }, -- marker to tell ecs to just fill with default values
-		[Health] = { Ecs:Default() },
-		[Position] = { Ecs:Default() },
+		[EnemyTag] = Ecs:Default(), -- marker to tell ecs to just fill with default values
+		[Health] = Ecs:Default(),
+		[Position] = Ecs:Default(),
 		[Velocity] = { x = 10, y = 0, z = 0 },
 	})
 
