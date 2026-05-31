@@ -1,5 +1,7 @@
 use bevy::{
-    ecs::component::{ComponentCloneBehavior, ComponentDescriptor, ComponentMutability, Mutable},
+    ecs::component::{
+        ComponentCloneBehavior, ComponentDescriptor, ComponentMutability, Mutable, StorageType,
+    },
     prelude::*,
 };
 use mluau::prelude::*;
@@ -60,7 +62,7 @@ pub fn register_component(world: &mut World, value: LuaTable) {
     world.register_component_with_descriptor(unsafe {
         ComponentDescriptor::new_with_layout(
             "lua_table",
-            bevy::ecs::component::StorageType::Table,
+            StorageType::Table,
             layout,
             None,
             Mutable::MUTABLE,
