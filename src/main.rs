@@ -1,3 +1,5 @@
+mod luau_ir;
+
 use bevy::prelude::*;
 use mluau::prelude::*;
 
