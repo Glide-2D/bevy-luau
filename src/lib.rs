@@ -16,26 +16,54 @@ pub struct ScriptingPlugin;
 impl Plugin for ScriptingPlugin {
     fn build(&self, app: &mut App) {
         app.init_non_send::<ScriptingRuntime>()
-            .init_resource::<EngineStringPool>()
+            .init_non_send::<EngineStringPool>()
             .init_resource::<SchemaRegistry>();
     }
+}
+
+pub enum LuaSchedule {
+    Startup,
+    Update,
+}
+
+pub enum Access {
+    With(ComponentId),
+    Read(ComponentId),
+    Write(ComponentId),
+    Optional(Box<Access>),
+}
+
+pub struct DynamicQuery {
+    terms: Vec<Access>,
+}
+
+pub enum LuaParamKind {
+    Query(DynamicQuery),
+    Resource,
 }
 
 #[derive(Default)]
 pub struct ScriptingRuntime {
     pub lua: Lua,
+    pub systems: Vec<LuaSystemDescriptor>,
+    pub schemas: HashMap<ComponentId, DynamicComponentSchema>,
 }
 
-#[derive(Resource, Default)]
+pub struct LuaSystemDescriptor {
+    func: LuaFunction,
+    schedule: LuaSchedule,
+    params: Vec<LuaParamKind>,
+}
+
+#[derive(Default)]
 pub struct EngineStringPool {
     pub rodeo: Rodeo,
-    pub bridge: HashMap<Spur, LuaRegistryKey>,
+    pub bridge: HashMap<Spur, LuaString>,
 }
 
 impl EngineStringPool {
-    pub fn get_lua_str(&self, lua: &Lua, spur: Spur) -> LuaString {
-        let key = self.bridge.get(&spur).expect("unregistered spur");
-        lua.registry_value(key).expect("failed to retrieve string")
+    pub fn get_lua_str(&self, spur: Spur) -> &LuaString {
+        self.bridge.get(&spur).expect("unregistered spur")
     }
 
     pub fn register_lua_string(&mut self, lua: &Lua, s: &LuaString) -> Option<Spur> {
@@ -43,7 +71,7 @@ impl EngineStringPool {
         let spur = self.rodeo.get_or_intern(&*borrowed);
         self.bridge
             .entry(spur)
-            .or_insert_with(|| lua.create_registry_value(s.clone()).unwrap());
+            .or_insert_with(|| lua.create_string(s.clone().as_bytes()).unwrap());
         Some(spur)
     }
 
@@ -174,10 +202,10 @@ impl DynamicComponentBridge {
         }
 
         for (&spur, &(offset, field_type)) in &schema.fields {
-            let lua_key = pool.get_lua_str(lua, spur);
+            let lua_string = pool.get_lua_str(spur);
             let field_ptr = unsafe { scratch_ptr.add(offset) };
 
-            match (table.raw_get::<LuaValue>(lua_key)?, field_type) {
+            match (table.raw_get::<LuaValue>(lua_string)?, field_type) {
                 (LuaValue::Boolean(b), LuauFieldType::Bool) => unsafe {
                     std::ptr::write(field_ptr.cast::<bool>(), b)
                 },
@@ -245,36 +273,36 @@ impl DynamicComponentBridge {
         let table = lua.create_table()?;
 
         for (&spur, &(offset, field_type)) in &schema.fields {
-            let lua_key = pool.get_lua_str(lua, spur);
+            let lua_string = pool.get_lua_str(spur);
             let field_ptr = unsafe { raw_ptr.add(offset) };
 
             match field_type {
                 LuauFieldType::Bool => {
                     let val = unsafe { &*field_ptr.cast::<bool>() };
-                    table.raw_set(lua_key, *val)?;
+                    table.raw_set(lua_string, *val)?;
                 }
                 LuauFieldType::Integer => {
                     let val = unsafe { &*field_ptr.cast::<i64>() };
-                    table.raw_set(lua_key, *val)?;
+                    table.raw_set(lua_string, *val)?;
                 }
                 LuauFieldType::Number => {
                     let val = unsafe { &*field_ptr.cast::<f64>() };
-                    table.raw_set(lua_key, *val)?;
+                    table.raw_set(lua_string, *val)?;
                 }
                 LuauFieldType::Vector4 => {
                     let array_ref = unsafe { &*field_ptr.cast::<[f32; 4]>() };
                     table.raw_set(
-                        lua_key,
+                        lua_string,
                         mluau::Vector::new(array_ref[0], array_ref[1], array_ref[2], array_ref[3]),
                     )?;
                 }
                 LuauFieldType::String => {
                     let str_spur = unsafe { &*field_ptr.cast::<Spur>() };
-                    table.raw_set(lua_key, pool.get_lua_str(lua, *str_spur))?;
+                    table.raw_set(lua_string, pool.get_lua_str(*str_spur))?;
                 }
                 LuauFieldType::Buffer(len) => {
                     let slice = unsafe { std::slice::from_raw_parts(field_ptr, len) };
-                    table.raw_set(lua_key, lua.create_buffer(slice)?)?;
+                    table.raw_set(lua_string, lua.create_buffer(slice)?)?;
                 }
             }
         }
