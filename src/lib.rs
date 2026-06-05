@@ -17,6 +17,7 @@ use mluau::prelude::*;
 use std::{
     alloc::{Layout, alloc_zeroed, dealloc},
     collections::{HashMap, HashSet},
+    path::PathBuf,
     ptr::NonNull,
 };
 
@@ -79,6 +80,87 @@ impl Default for ScriptingRuntime {
             systems: Vec::new(),
             observers: Vec::new(),
         }
+    }
+}
+
+#[derive(Default)]
+struct BevyLuauResolver {
+    current_path: PathBuf,
+}
+
+impl LuaRequire for BevyLuauResolver {
+    fn is_require_allowed(&self, _chunk_name: &str) -> bool {
+        true
+    }
+
+    fn reset(&mut self, chunk_name: &str) -> Result<(), LuaNavigateError> {
+        let base_path = if chunk_name.is_empty() {
+            "assets/scripts/init.luau"
+        } else {
+            chunk_name
+        };
+
+        self.current_path = PathBuf::from(base_path);
+
+        Ok(())
+    }
+
+    fn jump_to_alias(&mut self, _path: &str) -> Result<(), LuaNavigateError> {
+        Err(LuaNavigateError::NotFound)
+    }
+
+    fn to_parent(&mut self) -> Result<(), LuaNavigateError> {
+        let mut temp_path = self.current_path.clone();
+
+        if temp_path.pop() {
+            if !temp_path.starts_with("assets/scripts") {
+                return Err(LuaNavigateError::NotFound);
+            }
+            self.current_path = temp_path;
+            Ok(())
+        } else {
+            Err(LuaNavigateError::NotFound)
+        }
+    }
+
+    fn to_child(&mut self, name: &str) -> Result<(), LuaNavigateError> {
+        self.current_path.push(name);
+        Ok(())
+    }
+
+    fn has_module(&self) -> bool {
+        let luau_path = self.current_path.with_extension("luau");
+        let lua_path = self.current_path.with_extension("lua");
+
+        luau_path.exists() || lua_path.exists()
+    }
+
+    fn cache_key(&self) -> String {
+        self.current_path.to_string_lossy().into_owned()
+    }
+
+    fn has_config(&self) -> bool {
+        false
+    }
+
+    fn config(&self) -> std::io::Result<Vec<u8>> {
+        Ok(Vec::new())
+    }
+
+    fn loader(&self, lua: &Lua) -> LuaResult<LuaFunction> {
+        let file_path = if self.current_path.with_extension("luau").exists() {
+            self.current_path.with_extension("luau")
+        } else {
+            self.current_path.with_extension("lua")
+        };
+
+        let source = std::fs::read_to_string(&file_path).map_err(|e| {
+            LuaError::RuntimeError(format!("Failed to read module {:?}: {}", file_path, e))
+        })?;
+
+        lua.load(&source)
+            .set_name(file_path.to_string_lossy())
+            .into_function()
     }
 }
 
@@ -968,6 +1050,13 @@ fn load_scripts(world: &mut World) {
 
     let globals = runtime.lua.globals();
 
+    let require_fn = runtime
+        .lua
+        .create_require_function(BevyLuauResolver::default())
+        .unwrap();
+
+    globals.set("require", require_fn).unwrap();
+
     let ecs = runtime.lua.create_userdata(EcsHandle).unwrap();
     globals.set("Ecs", ecs).unwrap();
 
@@ -1006,7 +1095,12 @@ fn load_scripts(world: &mut World) {
 
     match std::fs::read_to_string("assets/scripts/init.luau") {
         Ok(source) => {
-            if let Err(e) = runtime.lua.load(&source).exec() {
+            if let Err(e) = runtime
+                .lua
+                .load(&source)
+                .set_name("assets/scripts/init.luau")
+                .exec()
+            {
                 error!("Script error: {e}");
             }
         }

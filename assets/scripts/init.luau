@@ -1,3 +1,5 @@
+local add = require("./module_example")
+
 local Position = Ecs:RegisterComponent({ x = 0, y = 0, z = 0 })
 local Velocity = Ecs:RegisterComponent({ x = 0, y = 0, z = 0 })
 local Health = Ecs:RegisterComponent({ current = 100, max = 100 })
@@ -42,6 +44,8 @@ function Setup(Commands, Score)
 	})
 
 	Score.value += 3
+
+	print(add(4, 6))
 
 	print("setup")
 end
