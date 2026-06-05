@@ -1,5 +1,3 @@
-local Ecs = require("Ecs") :: any
-
 local Position = Ecs:RegisterComponent({ x = 0, y = 0, z = 0 })
 local Velocity = Ecs:RegisterComponent({ x = 0, y = 0, z = 0 })
 local Health = Ecs:RegisterComponent({ current = 100, max = 100 })
@@ -14,6 +12,8 @@ local HealthQuery = Ecs:Query({
 	Mutable = { Health },
 })
 
+print("ran")
+
 function OnHitObserver(entity, hit, Commands, HealthQuery)
 	local hp = HealthQuery:get(entity)
 	if hp then
@@ -22,10 +22,12 @@ function OnHitObserver(entity, hit, Commands, HealthQuery)
 			Commands:Trigger(entity, OnDeath, {})
 		end
 	end
+	print("hit")
 end
 
 function OnDeathObserver(entity, _, Commands)
 	Commands:Despawn(entity)
+	print("died")
 end
 
 Ecs:Observe(OnHit, OnHitObserver, { Ecs:Commands(), HealthQuery })
@@ -40,6 +42,8 @@ function Setup(Commands, Score)
 	})
 
 	Score.value += 3
+
+	print("setup")
 end
 
 local MoveQuery = Ecs:Query({
@@ -49,7 +53,7 @@ local MoveQuery = Ecs:Query({
 })
 
 function Update(Time, Commands, MoveQuery) -- values snapshotted from rust
-	local dt = Time.dt()
+	local dt = Time:dt()
 
 	for entity, pos, vel in MoveQuery do
 		pos.x += vel.x * dt -- this is in pure luau and once the function finishes it flushes back to rust
@@ -58,6 +62,8 @@ function Update(Time, Commands, MoveQuery) -- values snapshotted from rust
 
 		Commands:Trigger(entity, OnHit, { damage = 50 }) -- puts in a queue and flushes when function ends
 		Commands:Trigger(entity, OnHit, { damage = 60 })
+
+		print("update")
 	end
 end
 
