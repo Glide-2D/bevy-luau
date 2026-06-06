@@ -31,7 +31,7 @@ Ecs:Observe(OnHit, OnHitObserver, { Ecs:Commands(), HealthQuery })
 Ecs:Observe(OnDeath, OnDeathObserver, { Ecs:Commands() })
 
 function Setup(Commands, Score)
-	for i = 1, 300000 do
+	for i = 1, 3000 do
 		Commands:Spawn({
 			[EnemyTag] = Ecs:Default(),
 			[Health] = Ecs:Default(),
