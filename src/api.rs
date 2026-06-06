@@ -95,7 +95,6 @@ impl LuaUserData for LuaCommandsHandle {
             let mut spawn = SpawnCmd {
                 components: Vec::new(),
             };
-
             for pair in components.pairs::<LuaValue, LuaValue>() {
                 let (key, value) = pair?;
                 if let LuaValue::UserData(ud) = key {
