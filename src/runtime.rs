@@ -2,15 +2,16 @@ use std::path::PathBuf;
 
 use bevy::ecs::component::ComponentId;
 use mluau::prelude::*;
+use smallvec::SmallVec;
 
 use crate::types::LuaSchedule;
 
 #[derive(Clone, Default)]
 pub struct ResolvedQuery {
-    pub mutable: Vec<ComponentId>,
-    pub immutable: Vec<ComponentId>,
-    pub with: Vec<ComponentId>,
-    pub without: Vec<ComponentId>,
+    pub mutable: SmallVec<[ComponentId; 4]>,
+    pub immutable: SmallVec<[ComponentId; 4]>,
+    pub with: SmallVec<[ComponentId; 4]>,
+    pub without: SmallVec<[ComponentId; 4]>,
 }
 
 #[derive(Clone)]
@@ -24,13 +25,13 @@ pub enum LuaParam {
 pub struct LuaSystemDescriptor {
     pub func: LuaFunction,
     pub schedule: LuaSchedule,
-    pub params: Vec<LuaParam>,
+    pub params: SmallVec<[LuaParam; 6]>,
 }
 
 pub struct LuaObserverDescriptor {
     pub event_id: ComponentId,
     pub func: LuaFunction,
-    pub params: Vec<LuaParam>,
+    pub params: SmallVec<[LuaParam; 6]>,
 }
 
 pub struct ScriptingRuntime {
@@ -94,9 +95,11 @@ impl LuaRequire for LuauResolver {
     fn cache_key(&self) -> String {
         self.current_path.to_string_lossy().into_owned()
     }
+
     fn has_config(&self) -> bool {
         false
     }
+
     fn config(&self) -> std::io::Result<Vec<u8>> {
         Ok(Vec::new())
     }

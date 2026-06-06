@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use mluau::prelude::*;
+use smallvec::SmallVec;
 
 use crate::bridge::DynamicComponentBridge;
 use crate::commands::{CommandBuffer, TriggerCmd};
@@ -14,7 +15,7 @@ pub fn lua_startup_system(world: &mut World) {
     let runtime = world.remove_non_send::<ScriptingRuntime>().unwrap();
     let mut pool = world.remove_non_send::<EngineStringPool>().unwrap();
 
-    let indices: Vec<usize> = (0..runtime.systems.len())
+    let indices: SmallVec<[usize; 4]> = (0..runtime.systems.len())
         .filter(|&i| matches!(runtime.systems[i].schedule, LuaSchedule::Startup))
         .collect();
 
@@ -37,7 +38,7 @@ pub fn lua_update_system(world: &mut World) {
     let runtime = world.remove_non_send::<ScriptingRuntime>().unwrap();
     let mut pool = world.remove_non_send::<EngineStringPool>().unwrap();
 
-    let indices: Vec<usize> = (0..runtime.systems.len())
+    let indices: SmallVec<[usize; 4]> = (0..runtime.systems.len())
         .filter(|&i| matches!(runtime.systems[i].schedule, LuaSchedule::Update))
         .collect();
 
@@ -70,7 +71,7 @@ pub fn run_lua_system(
     let cmd_ptr = std::ptr::addr_of_mut!(cmd_buffer);
 
     world.resource_scope(|world, mut registry: Mut<SchemaRegistry>| {
-        let mut args = Vec::<LuaValue>::new();
+        let mut args = SmallVec::<[LuaValue; 8]>::new();
 
         for param in &system.params {
             args.push(match param {
@@ -100,7 +101,7 @@ pub fn run_lua_system(
 
         if let Err(e) = system
             .func
-            .call::<LuaMultiValue>(LuaMultiValue::from_vec(args.clone()))
+            .call::<LuaMultiValue>(LuaMultiValue::from_vec(args.iter().cloned().collect()))
         {
             error!("{e}");
         }
@@ -137,10 +138,9 @@ pub fn run_lua_observer(
     let cmd_ptr = std::ptr::addr_of_mut!(cmd_buffer);
 
     world.resource_scope(|world, registry: Mut<SchemaRegistry>| {
-        let mut args = vec![
-            LuaValue::Integer(entity.to_bits().cast_signed()),
-            LuaValue::Table(event_data.clone()),
-        ];
+        let mut args = SmallVec::<[LuaValue; 8]>::new();
+        args.push(LuaValue::Integer(entity.to_bits().cast_signed()));
+        args.push(LuaValue::Table(event_data.clone()));
 
         for param in &observer.params {
             args.push(match param {
@@ -158,7 +158,7 @@ pub fn run_lua_observer(
 
         if let Err(e) = observer
             .func
-            .call::<LuaMultiValue>(LuaMultiValue::from_vec(args.clone()))
+            .call::<LuaMultiValue>(LuaMultiValue::from_vec(args.iter().cloned().collect()))
         {
             error!("{e}");
         }
@@ -182,7 +182,7 @@ fn dispatch_trigger(
     trigger: TriggerCmd,
     observers: &[LuaObserverDescriptor],
 ) {
-    let indices: Vec<usize> = observers
+    let indices: SmallVec<[usize; 4]> = observers
         .iter()
         .enumerate()
         .filter(|(_, o)| o.event_id == trigger.event_id)

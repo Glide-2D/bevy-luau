@@ -1,5 +1,6 @@
 use bevy::{ecs::component::ComponentId, prelude::*};
 use mluau::prelude::*;
+use smallvec::SmallVec;
 
 use crate::pool::EngineStringPool;
 use crate::runtime::{
@@ -42,10 +43,10 @@ impl LuaUserData for ResourceDesc {}
 
 #[derive(Clone, Default)]
 struct StagedQuery {
-    mutable: Vec<usize>,
-    immutable: Vec<usize>,
-    with: Vec<usize>,
-    without: Vec<usize>,
+    mutable: SmallVec<[usize; 4]>,
+    immutable: SmallVec<[usize; 4]>,
+    with: SmallVec<[usize; 4]>,
+    without: SmallVec<[usize; 4]>,
 }
 
 #[derive(Clone)]
@@ -59,13 +60,13 @@ enum StagedParam {
 pub(crate) struct StagedSystem {
     func: LuaFunction,
     schedule: LuaSchedule,
-    params: Vec<StagedParam>,
+    params: SmallVec<[StagedParam; 6]>,
 }
 
 pub(crate) struct StagedObserver {
     event_idx: usize,
     func: LuaFunction,
-    params: Vec<StagedParam>,
+    params: SmallVec<[StagedParam; 6]>,
 }
 
 pub(crate) struct ComponentBlueprint {
@@ -131,10 +132,10 @@ impl LuaUserData for EcsHandle {
         });
 
         methods.add_method("Query", |lua, _, def: LuaTable| {
-            let read_staging_ids = |key: &str| -> LuaResult<Vec<usize>> {
+            let read_staging_ids = |key: &str| -> LuaResult<SmallVec<[usize; 4]>> {
                 let t: Option<LuaTable> = def.get(key)?;
                 t.map_or_else(
-                    || Ok(Vec::new()),
+                    || Ok(SmallVec::new()),
                     |t| {
                         t.sequence_values::<LuaAnyUserData>()
                             .map(|v| Ok(v?.borrow::<LuaComponentMarker>()?.staging_idx))
@@ -243,7 +244,7 @@ fn infer_field_type(value: &LuaValue) -> LuaResult<LuauFieldType> {
     }
 }
 
-fn parse_staged_params(table: &LuaTable) -> LuaResult<Vec<StagedParam>> {
+fn parse_staged_params(table: &LuaTable) -> LuaResult<SmallVec<[StagedParam; 6]>> {
     table
         .sequence_values::<LuaValue>()
         .map(|val| match val? {

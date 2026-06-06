@@ -1,10 +1,11 @@
 use bevy::{ecs::component::ComponentId, prelude::*};
 use mluau::prelude::*;
+use smallvec::SmallVec;
 
 use crate::loading::LuaComponentMarker;
 
 pub struct SpawnCmd {
-    pub components: Vec<(ComponentId, Option<LuaTable>)>,
+    pub components: SmallVec<[(ComponentId, Option<LuaTable>); 8]>,
 }
 
 pub struct TriggerCmd {
@@ -15,9 +16,9 @@ pub struct TriggerCmd {
 
 #[derive(Default)]
 pub struct CommandBuffer {
-    pub spawns: Vec<SpawnCmd>,
-    pub despawns: Vec<Entity>,
-    pub triggers: Vec<TriggerCmd>,
+    pub spawns: SmallVec<[SpawnCmd; 4]>,
+    pub despawns: SmallVec<[Entity; 8]>,
+    pub triggers: SmallVec<[TriggerCmd; 8]>,
 }
 
 pub struct LuaCommandsHandle(pub *mut CommandBuffer);
@@ -26,7 +27,7 @@ impl LuaUserData for LuaCommandsHandle {
     fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("Spawn", |_, this, components: LuaTable| {
             let mut spawn = SpawnCmd {
-                components: Vec::new(),
+                components: SmallVec::new(),
             };
 
             for pair in components.pairs::<LuaValue, LuaValue>() {

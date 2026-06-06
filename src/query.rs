@@ -3,6 +3,7 @@ use bevy::{
     prelude::*,
 };
 use mluau::prelude::*;
+use smallvec::SmallVec;
 
 use crate::bridge::DynamicComponentBridge;
 use crate::pool::EngineStringPool;
@@ -40,8 +41,8 @@ impl LuaUserData for LuaTime {
 #[derive(Clone)]
 pub struct SnapshotRow {
     pub entity: Entity,
-    pub mutable_tables: Vec<LuaTable>,
-    pub immutable_tables: Vec<LuaTable>,
+    pub mutable_tables: SmallVec<[LuaTable; 4]>,
+    pub immutable_tables: SmallVec<[LuaTable; 4]>,
 }
 
 pub struct QuerySnapshot {
@@ -116,8 +117,8 @@ pub fn snapshot_query(
 
     let mut rows = Vec::with_capacity(entities.len());
     for entity in entities {
-        let mut mutable_tables = Vec::new();
-        let mut immutable_tables = Vec::new();
+        let mut mutable_tables = SmallVec::new();
+        let mut immutable_tables = SmallVec::new();
 
         for &comp_id in &desc.mutable {
             if let Some(t) = unsafe {
