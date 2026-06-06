@@ -1,5 +1,3 @@
-local add = require("./module_example")
-
 local Position = Ecs:RegisterComponent({ x = 0, y = 0, z = 0 })
 local Velocity = Ecs:RegisterComponent({ x = 0, y = 0, z = 0 })
 local Health = Ecs:RegisterComponent({ current = 100, max = 100 })
@@ -14,8 +12,6 @@ local HealthQuery = Ecs:Query({
 	Mutable = { Health },
 })
 
-print("ran")
-
 function OnHitObserver(entity, hit, Commands, HealthQuery)
 	local hp = HealthQuery:get(entity)
 	if hp then
@@ -24,30 +20,26 @@ function OnHitObserver(entity, hit, Commands, HealthQuery)
 			Commands:Trigger(entity, OnDeath, {})
 		end
 	end
-	print("hit")
 end
 
 function OnDeathObserver(entity, _, Commands)
 	Commands:Despawn(entity)
-	print("died")
 end
 
 Ecs:Observe(OnHit, OnHitObserver, { Ecs:Commands(), HealthQuery })
 Ecs:Observe(OnDeath, OnDeathObserver, { Ecs:Commands() })
 
 function Setup(Commands, Score)
-	Commands:Spawn({
-		[EnemyTag] = Ecs:Default(),
-		[Health] = Ecs:Default(),
-		[Position] = Ecs:Default(),
-		[Velocity] = { x = 10, y = 0, z = 0 },
-	})
+	for i = 1, 3000 do
+		Commands:Spawn({
+			[EnemyTag] = Ecs:Default(),
+			[Health] = Ecs:Default(),
+			[Position] = Ecs:Default(),
+			[Velocity] = { x = 10, y = 0, z = 0 },
+		})
+	end
 
 	Score.value += 3
-
-	print("imported from example module:", add(4, 6))
-
-	print("setup")
 end
 
 local MoveQuery = Ecs:Query({
@@ -64,10 +56,10 @@ function Update(Time, Commands, MoveQuery) -- values snapshotted from rust
 		pos.y += vel.y * dt
 		pos.z += vel.z * dt
 
-		Commands:Trigger(entity, OnHit, { damage = 50 }) -- puts in a queue and flushes when function ends
-		Commands:Trigger(entity, OnHit, { damage = 60 })
+		Commands:Trigger(entity, OnHit, { damage = math.random(0, 100) }) -- puts in a queue and flushes when function ends
+		Commands:Trigger(entity, OnHit, { damage = math.random(0, 100) })
 
-		print("update")
+		print("update:", entity)
 	end
 end
 
