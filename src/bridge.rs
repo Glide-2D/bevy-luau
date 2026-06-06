@@ -2,7 +2,7 @@ use bevy::{ecs::component::ComponentId, prelude::*, ptr::OwningPtr};
 use lasso::Spur;
 use mluau::prelude::*;
 use std::{
-    alloc::{Layout, alloc_zeroed, dealloc}, // Added Layout to imports
+    alloc::{Layout, alloc_zeroed, dealloc},
     ptr::NonNull,
 };
 
@@ -10,7 +10,6 @@ use crate::pool::EngineStringPool;
 use crate::schema::SchemaRegistry;
 use crate::types::LuauFieldType;
 
-// Simple RAII guard
 struct ScratchGuard {
     ptr: *mut u8,
     layout: Layout,
