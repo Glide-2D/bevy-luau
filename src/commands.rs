@@ -25,49 +25,59 @@ pub struct LuaCommandsHandle(pub *mut CommandBuffer);
 impl LuaUserData for LuaCommandsHandle {
     fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("Spawn", |_, this, components: LuaTable| {
-            let buffer = unsafe { &mut *this.0 };
             let mut spawn = SpawnCmd {
                 components: Vec::new(),
             };
+
             for pair in components.pairs::<LuaValue, LuaValue>() {
                 let (key, value) = pair?;
-                let comp_id = match key {
-                    LuaValue::UserData(ref ud) => match ud.borrow::<LuaComponentMarker>() {
-                        Ok(marker) => marker.component_id()?,
-                        Err(_) => continue,
-                    },
-                    _ => continue,
+
+                let LuaValue::UserData(ref ud) = key else {
+                    return Err(LuaError::RuntimeError(
+                        "Spawn keys must be Component markers".into(),
+                    ));
                 };
+
+                let marker = ud.borrow::<LuaComponentMarker>()?;
+                let comp_id = marker.component_id()?;
+
                 let data = match value {
                     LuaValue::UserData(ud) if ud.is::<crate::loading::DefaultMarker>() => None,
                     LuaValue::Table(t) => Some(t),
-                    _ => None,
+                    _ => {
+                        return Err(LuaError::RuntimeError(
+                            "Component data must be a table or DefaultMarker".into(),
+                        ));
+                    }
                 };
+
                 spawn.components.push((comp_id, data));
             }
-            buffer.spawns.push(spawn);
+
+            unsafe { (*this.0).spawns.push(spawn) };
+
             Ok(())
         });
 
         methods.add_method("Despawn", |_, this, entity_bits: i64| {
-            let buffer = unsafe { &mut *this.0 };
-            buffer
-                .despawns
-                .push(Entity::from_bits(entity_bits.cast_unsigned()));
+            let entity = Entity::from_bits(entity_bits.cast_unsigned());
+            unsafe { (*this.0).despawns.push(entity) };
             Ok(())
         });
 
         methods.add_method(
             "Trigger",
             |_, this, (entity_bits, event_ud, data): (i64, LuaAnyUserData, LuaTable)| {
-                let buffer = unsafe { &mut *this.0 };
                 let entity = Entity::from_bits(entity_bits.cast_unsigned());
                 let event_id = event_ud.borrow::<LuaComponentMarker>()?.component_id()?;
-                buffer.triggers.push(TriggerCmd {
-                    entity,
-                    event_id,
-                    data_table: data,
-                });
+
+                unsafe {
+                    (*this.0).triggers.push(TriggerCmd {
+                        entity,
+                        event_id,
+                        data_table: data,
+                    });
+                }
                 Ok(())
             },
         );
