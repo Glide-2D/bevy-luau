@@ -1,6 +1,8 @@
 use bevy::ecs::component::ComponentId;
 use bevy::prelude::*;
 use mluau::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Clone, Copy)]
 pub enum LuaSchedule {
@@ -64,24 +66,8 @@ pub struct LuaTime {
 
 impl LuaUserData for LuaTime {
     fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_meta_method(LuaMetaMethod::Index, |lua, this, key: LuaString| match key
-            .to_str()?
-            .as_ref()
-        {
-            "dt" => {
-                let dt = this.delta_secs;
-                Ok(LuaValue::Function(
-                    lua.create_function(move |_, ()| Ok(dt))?,
-                ))
-            }
-            "elapsed" => {
-                let elapsed = this.elapsed_secs;
-                Ok(LuaValue::Function(
-                    lua.create_function(move |_, ()| Ok(elapsed))?,
-                ))
-            }
-            _ => Ok(LuaValue::Nil),
-        });
+        methods.add_method("dt", |_, this, ()| Ok(this.delta_secs));
+        methods.add_method("elapsed", |_, this, ()| Ok(this.elapsed_secs));
     }
 }
 
@@ -101,33 +87,36 @@ pub struct TriggerCmd {
     pub data_table: LuaTable,
 }
 
-pub struct LuaCommandsHandle(pub *mut CommandBuffer);
+// Replaced mut with Rc<RefCell>
+pub struct LuaCommandsHandle(pub Rc<RefCell<CommandBuffer>>);
 
 impl LuaUserData for LuaCommandsHandle {
     fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("Spawn", |_, this, components: LuaTable| {
-            let buffer = unsafe { &mut *this.0 };
             let mut spawn = SpawnCmd {
                 components: Vec::new(),
             };
+
             for pair in components.pairs::<LuaValue, LuaValue>() {
                 let (key, value) = pair?;
-                if let LuaValue::UserData(ud) = key
-                    && let Ok(marker) = ud.borrow::<LuaComponentMarker>()
-                {
-                    let data = match value {
-                        LuaValue::Table(t) => Some(t),
-                        _ => None,
-                    };
-                    spawn.components.push((marker.0, data));
+                if let LuaValue::UserData(ud) = key {
+                    if let Ok(marker) = ud.borrow::<LuaComponentMarker>() {
+                        let data = if let LuaValue::Table(t) = value {
+                            Some(t)
+                        } else {
+                            None
+                        };
+                        spawn.components.push((marker.0, data));
+                    }
                 }
             }
-            buffer.spawns.push(spawn);
+            this.0.borrow_mut().spawns.push(spawn);
             Ok(())
         });
 
         methods.add_method("Despawn", |_, this, entity_bits: i64| {
-            unsafe { &mut *this.0 }
+            this.0
+                .borrow_mut()
                 .despawns
                 .push(Entity::from_bits(entity_bits as u64));
             Ok(())
@@ -138,7 +127,8 @@ impl LuaUserData for LuaCommandsHandle {
             |_, this, (entity_bits, event_ud, data): (i64, LuaAnyUserData, LuaTable)| {
                 let entity = Entity::from_bits(entity_bits as u64);
                 let event_id = event_ud.borrow::<LuaComponentMarker>()?.0;
-                unsafe { &mut *this.0 }.triggers.push(TriggerCmd {
+
+                this.0.borrow_mut().triggers.push(TriggerCmd {
                     entity,
                     event_id,
                     data_table: data,
@@ -202,14 +192,14 @@ impl LuaUserData for EcsHandle {
             |lua, _, (func, sched_ud, params_tbl): (LuaFunction, LuaAnyUserData, LuaTable)| {
                 let schedule = sched_ud.borrow::<ScheduleMarker>()?.0;
                 let params = parse_lua_params(&params_tbl)?;
+
                 crate::systems::with_ctx(lua, |ctx| {
-                    unsafe { &mut *ctx.runtime }
-                        .systems
-                        .push(LuaSystemDescriptor {
-                            func,
-                            schedule,
-                            params,
-                        });
+                    // Removed unsafe raw pointer mutation.
+                    ctx.runtime.borrow_mut().systems.push(LuaSystemDescriptor {
+                        func,
+                        schedule,
+                        params,
+                    });
                     Ok(())
                 })
             },
@@ -220,8 +210,11 @@ impl LuaUserData for EcsHandle {
             |lua, _, (event_ud, func, params_tbl): (LuaAnyUserData, LuaFunction, LuaTable)| {
                 let event_id = event_ud.borrow::<LuaComponentMarker>()?.0;
                 let params = parse_lua_params(&params_tbl)?;
+
                 crate::systems::with_ctx(lua, |ctx| {
-                    unsafe { &mut *ctx.runtime }
+                    // Removed unsafe raw pointer mutation.
+                    ctx.runtime
+                        .borrow_mut()
                         .observers
                         .push(LuaObserverDescriptor {
                             event_id,
@@ -235,22 +228,23 @@ impl LuaUserData for EcsHandle {
     }
 }
 
+// Simplified
 pub fn parse_lua_params(table: &LuaTable) -> LuaResult<Vec<LuaParam>> {
     table
-        .sequence_values::<LuaValue>()
-        .map(|val| match val? {
-            LuaValue::UserData(ud) if ud.is::<CommandsParam>() => Ok(LuaParam::Commands),
-            LuaValue::UserData(ud) if ud.is::<TimeParam>() => Ok(LuaParam::Time),
-            LuaValue::UserData(ud) if ud.is::<QueryDescHandle>() => {
-                Ok(LuaParam::Query(ud.borrow::<QueryDescHandle>()?.0.clone()))
+        .sequence_values::<LuaAnyUserData>()
+        .map(|ud| {
+            let ud = ud?;
+            if ud.is::<CommandsParam>() {
+                Ok(LuaParam::Commands)
+            } else if ud.is::<TimeParam>() {
+                Ok(LuaParam::Time)
+            } else if let Ok(q) = ud.borrow::<QueryDescHandle>() {
+                Ok(LuaParam::Query(q.0.clone()))
+            } else if let Ok(r) = ud.borrow::<LuaResourceMarker>() {
+                Ok(LuaParam::Resource(r.0))
+            } else {
+                Err(LuaError::runtime("invalid param type"))
             }
-            LuaValue::UserData(ud) if ud.is::<LuaResourceMarker>() => {
-                Ok(LuaParam::Resource(ud.borrow::<LuaResourceMarker>()?.0))
-            }
-            other => Err(LuaError::runtime(format!(
-                "invalid param type '{}'",
-                other.type_name()
-            ))),
         })
         .collect()
 }
@@ -264,7 +258,8 @@ pub struct SnapshotRow {
 
 pub struct QuerySnapshot {
     pub desc: LuaQuery,
-    pub rows: Vec<SnapshotRow>,
+    // Prevent memory bloat
+    pub rows: Rc<Vec<SnapshotRow>>,
 }
 
 impl LuaUserData for QuerySnapshot {
@@ -284,8 +279,9 @@ impl LuaUserData for QuerySnapshot {
         });
 
         methods.add_meta_method(LuaMetaMethod::Iter, |lua, this, ()| {
-            let rows = this.rows.clone();
+            let rows = Rc::clone(&this.rows);
             let mut index = 0usize;
+
             lua.create_function_mut(move |_, ()| {
                 if index >= rows.len() {
                     return Ok(LuaMultiValue::new());
