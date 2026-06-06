@@ -72,7 +72,7 @@ pub(crate) struct StagedObserver {
 
 pub(crate) struct ComponentBlueprint {
     pub name: SmolStr,
-    pub fields: Vec<(lasso::Spur, LuauFieldType)>,
+    pub fields: SmallVec<[(lasso::Spur, LuauFieldType); 4]>,
     pub is_resource: bool,
 }
 
@@ -218,7 +218,7 @@ fn collect_fields(
     lua: &Lua,
     pool: &mut EngineStringPool,
     table: &LuaTable,
-) -> LuaResult<Vec<(lasso::Spur, LuauFieldType)>> {
+) -> LuaResult<SmallVec<[(lasso::Spur, LuauFieldType); 4]>> {
     table
         .pairs::<LuaString, LuaValue>()
         .map(|pair| {
