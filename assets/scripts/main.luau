@@ -45,7 +45,7 @@ function Setup(Commands, Score)
 
 	Score.value += 3
 
-	print(add(4, 6))
+	print("imported from example module:", add(4, 6))
 
 	print("setup")
 end
